@@ -6,7 +6,7 @@ import altair as alt
 st.set_page_config(page_title="GS25 수익 시뮬레이터", layout="centered")
 
 # --- 비밀번호 인증 로직 ---
-PW = "gs254" 
+PW = "gs25" 
 
 def check_password():
     if "password" not in st.session_state:
