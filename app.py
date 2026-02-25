@@ -2,19 +2,18 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
-# 1. 페이지 설정
-st.set_page_config(page_title="GS25 수익 시뮬레이터", layout="centered")
+# 1. 페이지 설정 및 디자인
+st.set_page_config(page_title="GS25 정밀 수익 시뮬레이터", layout="wide")
 
-# --- 비밀번호 인증 로직 ---
-PW = "gs25"  # 설정하신 비밀번호
+# 비밀번호 설정
+PW = "gs254"
 
 def check_password():
     if "password" not in st.session_state:
         st.session_state["password"] = ""
     if st.session_state["password"] == PW:
         return True
-
-    st.title("🔐 임직원 인증")
+    st.title("🔐 GS25 임직원 인증")
     pwd = st.text_input("비밀번호를 입력하세요", type="password")
     if st.button("접속하기"):
         if pwd == PW:
@@ -25,112 +24,107 @@ def check_password():
     return False
 
 if check_password():
-    # 2. CSS 수정 (아이콘 강제 제거 및 간격 확보)
+    # CSS: 모바일 및 웹 겸용 스타일링
     st.markdown("""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
-        * { font-family: 'Noto Sans KR', sans-serif !important; }
-        
-        /* 깨지는 아이콘 텍스트 숨기기 */
-        span[data-testid="stWidgetLabel"] > div > div > display-element {
-            display: none !important;
-        }
-        
-        /* 메트릭 카드 간격 확보 */
-        [data-testid="stMetric"] {
-            background-color: #ffffff;
-            border: 1px solid #eee;
-            padding: 20px !important;
-            margin-bottom: 10px;
-            border-radius: 15px;
-        }
-        
-        /* 겹침 방지를 위한 섹션 간격 */
-        .stSlider { margin-top: 20px; margin-bottom: 20px; }
-        .stNumberInput { margin-bottom: 15px; }
-        
-        /* 표 가독성 */
-        .stTable { margin-top: 20px; }
+        .stNumberInput input { font-size: 16px !important; }
+        .gs2-box { background-color: #f1f8ff; padding: 15px; border-radius: 10px; border-left: 5px solid #007aff; margin-bottom: 10px; }
+        .support-box { background-color: #fff9db; padding: 15px; border-radius: 10px; border-left: 5px solid #fcc419; margin-bottom: 10px; }
         </style>
         """, unsafe_allow_html=True)
 
-    # 3. 데이터
-    type_info = {
-        "GS1": {"support": 184.0, "royalty": 0.71},
-        "GS2": {"support": 205.8, "royalty": 0.65},
-        "GS3": {"support": 240.4, "royalty": 0.46}
-    }
-
-    st.title("📊 GS25 수익 시뮬레이터")
+    st.title("📊 GS25 정밀 수익 시뮬레이터")
     st.write("---")
 
-    # 4. 입력 섹션
-    st.subheader("📋 [1] 현재 현황 입력")
-    c_type = st.selectbox("현재 가맹 타입", ["GS1", "GS2", "GS3"])
-    c_rent = 0
-    if c_type == "GS2":
-        c_rent = st.number_input("현재 월 임차료 (천원)", value=0, step=10)
-    c_sales = st.number_input("현재 일매출 (천원)", value=1500, step=10)
-    c_margin = st.slider("현재 매익률 (%)", 20.0, 45.0, 30.0, step=0.1)
-    c_o4o = st.number_input("현재 O4O 월매출 (천원)", value=0, step=10)
+    # 데이터 입력 함수
+    def input_section(label_prefix):
+        st.subheader(f"📍 {label_prefix} 조건 설정")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            u_type = st.selectbox(f"{label_prefix} 타입", ["GS1", "GS2", "GS3"], key=f"{label_prefix}_type")
+            is_24h = st.radio(f"{label_prefix} 24시간 영업", ["Y", "N"], key=f"{label_prefix}_24h", horizontal=True)
+            sales = st.number_input(f"{label_prefix} 일매출 (천원)", value=1500, step=10, key=f"{label_prefix}_sales")
+            margin = st.slider(f"{label_prefix} 매익률 (%)", 20.0, 45.0, 30.0, step=0.1, key=f"{label_prefix}_margin")
+        
+        # GS2 전용 입력창 (선택 시에만 등장)
+        lease_dep, sub_dep, premium, rent = 0, 0, 0, 0
+        if u_type == "GS2":
+            st.markdown(f'<div class="gs2-box"><b>🏢 GS2 임차 조건 (천원)</b>', unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            lease_dep = c1.number_input(f"{label_prefix} 임차보증금", value=0, key=f"{label_prefix}_ld")
+            sub_dep = c2.number_input(f"{label_prefix} 전대보증금", value=0, key=f"{label_prefix}_sd")
+            premium = c1.number_input(f"{label_prefix} 권리금", value=0, key=f"{label_prefix}_pr")
+            rent = c2.number_input(f"{label_prefix} 월 임차료", value=0, key=f"{label_prefix}_rt")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # 세부 지원금 입력창
+        st.markdown(f'<div class="support-box"><b>💰 세부 지원금 및 인센티브</b>', unsafe_allow_html=True)
+        s1, s2 = st.columns(2)
+        sup_fix = s1.number_input(f"{label_prefix} 정액지원금 (천원)", value=150, key=f"{label_prefix}_sf")
+        sup_rate = s2.number_input(f"{label_prefix} 정률지원금 (%)", value=0.0, step=0.1, key=f"{label_prefix}_sr")
+        order_inc = s1.number_input(f"{label_prefix} 발주장려금 (천원)", value=30, key=f"{label_prefix}_oi")
+        st.markdown('</div>', unsafe_allow_html=True)
 
+        return {
+            "type": u_type, "24h": is_24h, "sales": sales, "margin": margin,
+            "lease_dep": lease_dep, "sub_dep": sub_dep, "premium": premium, "rent": rent,
+            "sup_fix": sup_fix, "sup_rate": sup_rate, "order_inc": order_inc
+        }
+
+    # 2. 메인 화면 - 좌우 비교 레이아웃
+    left_col, right_col = st.columns(2)
+    with left_col:
+        cur_data = input_section("현재")
+    with right_col:
+        tar_data = input_section("목표")
+
+    # 3. 계산 로직 (수식 적용)
+    def calculate_logic(data):
+        # 월 매출 및 이익 계산
+        m_sales = data["sales"] * 30.41
+        m_profit = m_sales * (data["margin"] / 100)
+        
+        # 타입별 기본 배분율 (24시간 여부 적용)
+        royalty_map = {
+            "GS1": {"Y": 0.71, "N": 0.66},
+            "GS2": {"Y": 0.65, "N": 0.60},
+            "GS3": {"Y": 0.46, "N": 0.41}
+        }
+        r_rate = royalty_map[data["type"]][data["24h"]]
+        owner_share = m_profit * r_rate
+        
+        # 지원금 합계 = (이익 * 정률%) + 정액 + 발주장려금
+        total_support = (m_profit * (data["sup_rate"] / 100)) + data["sup_fix"] + data["order_inc"]
+        
+        # 최종 정산금 = 배분금 + 지원금 - 임차료
+        final_income = owner_share + total_support - data["rent"]
+        
+        return {
+            "m_sales": m_sales, "owner_share": owner_share, 
+            "total_support": total_support, "final_income": final_income
+        }
+
+    cur_res = calculate_logic(cur_data)
+    tar_res = calculate_logic(tar_data)
+    diff = tar_res["final_income"] - cur_res["final_income"]
+
+    # 4. 결과 리포트
     st.write("---")
+    st.subheader("📊 시뮬레이션 결과 리포트")
     
-    st.subheader("🎯 [2] 코칭 목표 설정")
-    t_type = st.selectbox("목표 가맹 타입", ["GS1", "GS2", "GS3"], index=(["GS1", "GS2", "GS3"].index(c_type)))
-    t_rent = 0
-    if t_type == "GS2":
-        t_rent = st.number_input("목표 월 임차료 (천원)", value=0, step=10)
-    t_sales = st.number_input("목표 일매출 (천원)", value=c_sales + 200, step=10)
-    t_margin = st.slider("목표 매익률 (%)", 20.0, 45.0, c_margin + 1.5, step=0.1)
-    t_o4o = st.number_input("목표 O4O 월매출 (천원)", value=500, step=10)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("현재 월 정산금", f"{int(cur_res['final_income']):,}원")
+    m2.metric("목표 월 정산금", f"{int(tar_res['final_income']):,}원", delta=f"{int(diff):,}원")
+    m3.metric("수익 개선율", f"{round((diff/cur_res['final_income'])*100, 1) if cur_res['final_income'] != 0 else 0}%")
 
-    # 5. 계산 로직
-    def calc(sales, margin, utype, o4o, rent=0):
-        m_sales = sales * 30.41
-        m_profit = m_sales * (margin / 100)
-        royalty = m_profit * type_info[utype]["royalty"]
-        support = type_info[utype]["support"]
-        o4o_profit = o4o * 0.16
-        return (royalty + support + o4o_profit) - rent
-
-    cur_total = calc(c_sales, c_margin, c_type, c_o4o, c_rent)
-    tar_total = calc(t_sales, t_margin, t_type, t_o4o, t_rent)
-    diff = tar_total - cur_total
-
-    # 6. 결과 출력
-    st.write("---")
-    st.subheader("💰 수익 분석 결과")
-    
-    col1, col2 = st.columns(2)
-    col1.metric("기존 수익", f"{int(cur_total):,}원")
-    col2.metric("목표 수익", f"{int(tar_total):,}원", delta=f"{int(diff):,}원")
-
-    if diff > 0:
-        st.success(f"💡 월 {int(diff):,}원의 추가 수익 창출이 가능합니다!")
-    else:
-        st.warning(f"💡 수익 개선을 위한 추가 코칭이 필요합니다.")
-
-    # 7. 차트
-    chart_df = pd.DataFrame({
-        "구분": ["현재", "목표"],
-        "수익": [cur_total, tar_total],
-        "Color": ["#cccccc", "#007aff"]
+    # 상세 데이터 테이블
+    st.write("### 📑 상세 비교 테이블")
+    comparison_df = pd.DataFrame({
+        "항목": ["가맹 타입", "24시간 영업", "매익률", "발주장려금", "지원금(정액)", "지원금(정률)", "임차보증금", "권리금", "임차료", "최종 월 수익"],
+        "현재": [cur_data["type"], cur_data["24h"], f"{cur_data['margin']}%", f"{cur_data['order_inc']:,}원", f"{cur_data['sup_fix']:,}원", f"{cur_data['sup_rate']}%", f"{cur_data['lease_dep']:,}원", f"{cur_data['premium']:,}원", f"-{cur_data['rent']:,}원", f"**{int(cur_res['final_income']):,}원**"],
+        "목표": [tar_data["type"], tar_data["24h"], f"{tar_data['margin']}%", f"{tar_data['order_inc']:,}원", f"{tar_data['sup_fix']:,}원", f"{tar_data['sup_rate']}%", f"{tar_data['lease_dep']:,}원", f"{tar_data['premium']:,}원", f"-{tar_data['rent']:,}원", f"**{int(tar_res['final_income']):,}원**"]
     })
-    chart = alt.Chart(chart_df).mark_bar(size=50, cornerRadiusTopLeft=10, cornerRadiusTopRight=10).encode(
-        x=alt.X('구분:N', axis=alt.Axis(labelAngle=0)),
-        y=alt.Y('수익:Q', title=None),
-        color=alt.Color('Color:N', scale=None)
-    ).properties(height=300)
-    st.altair_chart(chart, use_container_width=True)
+    st.table(comparison_df)
 
-    # 8. 상세 내역 (접기 대신 일반 텍스트로 변경하여 깨짐 방지)
-    st.write("---")
-    st.subheader("📑 상세 비교 데이터")
-    df_data = {
-        "항목": ["타입", "임차료", "매익률", "일매출", "월정산금"],
-        "현재": [c_type, f"{c_rent:,}", f"{c_margin}%", f"{c_sales:,}", f"{int(cur_total):,}"],
-        "목표": [t_type, f"{t_rent:,}", f"{t_margin}%", f"{t_sales:,}", f"{int(tar_total):,}"],
-    }
-    st.table(pd.DataFrame(df_data))
-    st.caption("※ 본 결과는 시뮬레이션이며 실제 정산과 다를 수 있습니다.")
+    st.success(f"✅ 코칭 결과: 목표 달성 시 월 **{int(diff):,}원**의 수익 증대가 예상됩니다.")
